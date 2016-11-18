@@ -1,6 +1,5 @@
 from __future__ import print_function
 
-import numpy as np
 import cv2
 import sys
 from time import time
@@ -14,13 +13,12 @@ onTracking = False
 ix, iy, cx, cy = -1, -1, -1, -1
 w, h = 0, 0
 
-interval = 30  # 30 ms
 duration = 0.01
 duration_smooth = 0.01
-detection_period = 5
+detection_period = 20
 
 
-def parse_label(label_line, data_format='KITTI'):
+def parse_label(label_line, data_format=''):
     if data_format == 'KITTI':
         val = label_line.split(' ')
         d = {'frame': int(val[0]), 'id': int(val[1]), 'type': val[2],
@@ -40,31 +38,28 @@ def parse_label(label_line, data_format='KITTI'):
 
 if __name__ == '__main__':
 
-    # ============ Usage: run.py <filename> <det_result>
+    # ============   Usage: run.py <filename> <det_result>   ============ #
 
-    if len(sys.argv) != 3:
-        # sys.argv.append('C:/Users/Cory/Project/vid/videos/Car4.mp4')
-        # sys.argv.append('C:/Users/Cory/Project/vid/det/Car4_label.csv')
+    if len(sys.argv) == 1:
         sys.argv.append('C:/Users/Cory/Project/vid/videos/vid01.mp4')
         sys.argv.append('C:/Users/Cory/Project/vid/det/vid01_det.txt')
+
+    assert len(sys.argv) == 3
 
     if not os.path.exists('output'):
         os.mkdir('output')
 
-    if len(sys.argv) >= 2:
-        cap = cv2.VideoCapture(sys.argv[1])
-        interval = 30
-    if len(sys.argv) >= 3:
-        labels_file = sys.argv[2]
-        frames = list()
-        for _ in range(int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))):
-            frames.append(list())
-        with open(labels_file) as labels:
-            for line in labels.readlines():
-                info = parse_label(line, 'vid')
-                if info.get('id') != -1:  # pass unknown objects
-                    fi = info.get('frame')
-                    frames[fi].append(info)
+    cap = cv2.VideoCapture(sys.argv[1])
+    labels_file = sys.argv[2]
+    frames = list()
+    for _ in range(int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))):
+        frames.append(list())
+    with open(labels_file) as labels:
+        for line in labels.readlines():
+            info = parse_label(line, 'vid')
+            if info.get('id') != -1:  # pass unknown objects
+                fi = info.get('frame')
+                frames[fi].append(info)
     trackers = dict()
 
     while cap.isOpened():
@@ -92,7 +87,7 @@ if __name__ == '__main__':
                 h = target.get('y2') - iy
                 tid = target.get('id')
 
-                trackers.update({tid: kcftracker.KCFTracker(False, False, True)})  # hog, fixed_window, multi-scale
+                trackers.update({tid: kcftracker.KCFTracker(True, False, True)})  # hog, fixed_window, multi-scale
                 # if you use hog feature, there will be a short pause after you draw a first boundingbox,
                 # that is due to the use of Numba.
 
@@ -128,8 +123,7 @@ if __name__ == '__main__':
 
         cv2.imshow('tracking', frame)
         cv2.imwrite('output/frame_%06d.jpg' % current_frame, frame)
-        c = cv2.waitKey(interval) & 0xFF
-        cv2.waitKey(1)
+        c = cv2.waitKey(1) & 0xFF
         if c == 27 or c == ord('q'):
             break
 
