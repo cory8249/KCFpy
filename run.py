@@ -6,18 +6,7 @@ from time import time
 import os
 
 import kcftracker
-
-selectingObject = False
-initTracking = False
-onTracking = False
-ix, iy, cx, cy = -1, -1, -1, -1
-w, h = 0, 0
-
-duration = 0.01
-duration_smooth = 0.01
-detection_period = 20
-
-imshow_enable = True
+from config import *
 
 
 def parse_label(label_line, data_format=''):
@@ -43,8 +32,8 @@ if __name__ == '__main__':
     # ============   Usage: run.py <filename> <det_result>   ============ #
 
     if len(sys.argv) == 1:
-        sys.argv.append('C:/Users/Cory/Project/vid/videos/vid01.mp4')
-        sys.argv.append('C:/Users/Cory/Project/vid/det/vid01_det.txt')
+        sys.argv.append(default_input_path)
+        sys.argv.append(default_det_path)
 
     assert len(sys.argv) == 3
     
@@ -76,6 +65,9 @@ if __name__ == '__main__':
                 fi = info.get('frame')
                 frames[fi].append(info)
     trackers = dict()
+
+    duration = 0.01
+    duration_smooth = 0.01
 
     for current_frame in range(frames_count):
         if input_mode == 'video':
