@@ -76,9 +76,6 @@ if __name__ == '__main__':
             current_frame_path = input_v_path + '/%06d.jpg' % (current_frame + 1)
             frame = cv2.imread(current_frame_path)
 
-        if current_frame < 860:
-            continue
-            
         if frame is None:
             print('read image/video error at frame', current_frame)
             if input_mode == 'image':
