@@ -17,7 +17,7 @@ duration = 0.01
 duration_smooth = 0.01
 detection_period = 20
 
-imshow_enable = False
+imshow_enable = True
 
 
 def parse_label(label_line, data_format=''):
@@ -43,8 +43,8 @@ if __name__ == '__main__':
     # ============   Usage: run.py <filename> <det_result>   ============ #
 
     if len(sys.argv) == 1:
-        sys.argv.append('/data/vid/videos/vid01.mp4')
-        sys.argv.append('/data/vid/det/vid01_det.txt')
+        sys.argv.append('C:/Users/Cory/Project/vid/videos/vid01.mp4')
+        sys.argv.append('C:/Users/Cory/Project/vid/det/vid01_det.txt')
 
     assert len(sys.argv) == 3
     
@@ -83,6 +83,9 @@ if __name__ == '__main__':
         else:
             current_frame_path = input_v_path + '/%06d.jpg' % (current_frame + 1)
             frame = cv2.imread(current_frame_path)
+
+        if current_frame < 860:
+            continue
             
         if frame is None:
             print('read image/video error at frame', current_frame)
