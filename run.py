@@ -117,7 +117,9 @@ if __name__ == '__main__':
                 # that is due to the use of Numba.
 
                 tracker = trackers.get(tid)
-                tracker.init([ix, iy, w, h], frame)
+                is_valid = tracker.init([ix, iy, w, h], frame)
+                if not is_valid:
+                    del trackers[tid]
 
             initTracking = False
             onTracking = True

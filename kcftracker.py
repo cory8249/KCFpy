@@ -290,9 +290,12 @@ class KCFTracker:
         self._roi = map(float, roi)
         assert (roi[2] > 0 and roi[3] > 0)
         self._tmpl = self.getFeatures(image, 1)
+        if self.size_patch[0] * self.size_patch[1] == 0:
+            return False
         self._prob = self.createGaussianPeak(self.size_patch[0], self.size_patch[1])
         self._alphaf = np.zeros((self.size_patch[0], self.size_patch[1], 2), np.float32)
         self.train(self._tmpl, 1.0)
+        return True
 
     def update(self, image):
         if (self._roi[0] + self._roi[2] <= 0):  self._roi[0] = -self._roi[2] + 1
