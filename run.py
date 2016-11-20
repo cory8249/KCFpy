@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
     frames = list()
     if input_mode == 'video':
-        cap = cv2.VideoCapture()
+        cap = cv2.VideoCapture(input_v_path)
         assert cap.isOpened()
         frames_count = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))
     else:
