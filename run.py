@@ -17,6 +17,8 @@ duration = 0.01
 duration_smooth = 0.01
 detection_period = 20
 
+imshow_enable = False
+
 
 def parse_label(label_line, data_format=''):
     if data_format == 'KITTI':
@@ -41,18 +43,31 @@ if __name__ == '__main__':
     # ============   Usage: run.py <filename> <det_result>   ============ #
 
     if len(sys.argv) == 1:
-        sys.argv.append('C:/Users/Cory/Project/vid/videos/vid01.mp4')
-        sys.argv.append('C:/Users/Cory/Project/vid/det/vid01_det.txt')
+        sys.argv.append('/data/vid/videos/vid01.mp4')
+        sys.argv.append('/data/vid/det/vid01_det.txt')
 
     assert len(sys.argv) == 3
-
+    
     if not os.path.exists('output'):
         os.mkdir('output')
-
-    cap = cv2.VideoCapture(sys.argv[1])
+    
+    input_v_path = sys.argv[1]
     labels_file = sys.argv[2]
+    if input_v_path.find('mp4') != -1:
+        input_mode = 'video'
+    else:
+        input_mode = 'image'
+
     frames = list()
-    for _ in range(int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))):
+    if input_mode == 'video':
+        cap = cv2.VideoCapture()
+        assert cap.isOpened()
+        frames_count = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))
+    else:
+        files_in_dir = sorted([f for f in os.listdir(input_v_path) if os.path.isfile(os.path.join(input_v_path, f))])
+        frames_count = len(files_in_dir)
+    
+    for _ in range(frames_count):
         frames.append(list())
     with open(labels_file) as labels:
         for line in labels.readlines():
@@ -62,12 +77,19 @@ if __name__ == '__main__':
                 frames[fi].append(info)
     trackers = dict()
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+    for current_frame in range(frames_count):
+        if input_mode == 'video':
+            ret, frame = cap.read()
+        else:
+            current_frame_path = input_v_path + '/%06d.jpg' % (current_frame + 1)
+            frame = cv2.imread(current_frame_path)
+            
+        if frame is None:
+            print('read image/video error at frame', current_frame)
+            if input_mode == 'image':
+                print(current_frame_path)
+            raise IOError
 
-        current_frame = int(cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)) - 1  # current_frame = get next_frame - 1
         print('frame %d' % current_frame, end='')
 
         if current_frame % detection_period == 0:
@@ -121,11 +143,13 @@ if __name__ == '__main__':
             cv2.putText(frame, 'FPS: ' + str(fps)[:4].strip('.'), (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                         (0, 0, 255), 2)
 
-        cv2.imshow('tracking', frame)
+        if imshow_enable:
+            cv2.imshow('tracking', frame)
+            c = cv2.waitKey(1) & 0xFF
+            if c == 27 or c == ord('q'):
+                break
+
         cv2.imwrite('output/frame_%06d.jpg' % current_frame, frame)
-        c = cv2.waitKey(1) & 0xFF
-        if c == 27 or c == ord('q'):
-            break
 
         print()
 
