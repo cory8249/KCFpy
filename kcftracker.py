@@ -1,8 +1,43 @@
 import numpy as np
 import cv2
 from time import time
-
 from fhog import *
+from config import *
+
+from threading import Thread
+from threading import Event
+
+class Future(object):
+    def __init__(self):
+        self._ev = Event()
+
+    def set_result(self, result):
+        self._result = result
+        self._ev.set()
+
+    def set_exception(self, exc):
+        self._exc = exc
+        self._ev.set()
+
+    def result(self):
+        self._ev.wait()
+        if hasattr(self, '_exc'):
+            raise self._exc
+        return self._result
+
+def call_with_future(fn, future, args, kwargs):
+    try:
+        result = fn(*args, **kwargs)
+        future.set_result(result)
+    except Exception as exc:
+        future.set_exception(exc)
+
+def threaded(fn):
+    def wrapper(*args, **kwargs):
+        future = Future()
+        Thread(target=call_with_future, args=(fn, future, args, kwargs)).start()
+        return future
+    return wrapper
 
 
 # ffttools
@@ -296,8 +331,54 @@ class KCFTracker:
         self._alphaf = np.zeros((self.size_patch[0], self.size_patch[1], 2), np.float32)
         self.train(self._tmpl, 1.0)
         return True
-
+    
+    
+    @threaded
     def update(self, image):
+        if (self._roi[0] + self._roi[2] <= 0):  self._roi[0] = -self._roi[2] + 1
+        if (self._roi[1] + self._roi[3] <= 0):  self._roi[1] = -self._roi[2] + 1
+        if (self._roi[0] >= image.shape[1] - 1):  self._roi[0] = image.shape[1] - 2
+        if (self._roi[1] >= image.shape[0] - 1):  self._roi[1] = image.shape[0] - 2
+
+        cx = self._roi[0] + self._roi[2] / 2.
+        cy = self._roi[1] + self._roi[3] / 2.
+
+        loc, peak_value = self.detect(self._tmpl, self.getFeatures(image, 0, 1.0))
+
+        if (self.scale_step != 1):
+            # Test at a smaller _scale
+            new_loc1, new_peak_value1 = self.detect(self._tmpl, self.getFeatures(image, 0, 1.0 / self.scale_step))
+            # Test at a bigger _scale
+            new_loc2, new_peak_value2 = self.detect(self._tmpl, self.getFeatures(image, 0, self.scale_step))
+
+            if (self.scale_weight * new_peak_value1 > peak_value and new_peak_value1 > new_peak_value2):
+                loc = new_loc1
+                peak_value = new_peak_value1
+                self._scale /= self.scale_step
+                self._roi[2] /= self.scale_step
+                self._roi[3] /= self.scale_step
+            elif (self.scale_weight * new_peak_value2 > peak_value):
+                loc = new_loc2
+                peak_value = new_peak_value2
+                self._scale *= self.scale_step
+                self._roi[2] *= self.scale_step
+                self._roi[3] *= self.scale_step
+
+        self._roi[0] = cx - self._roi[2] / 2.0 + loc[0] * self.cell_size * self._scale
+        self._roi[1] = cy - self._roi[3] / 2.0 + loc[1] * self.cell_size * self._scale
+
+        if (self._roi[0] >= image.shape[1] - 1):  self._roi[0] = image.shape[1] - 1
+        if (self._roi[1] >= image.shape[0] - 1):  self._roi[1] = image.shape[0] - 1
+        if (self._roi[0] + self._roi[2] <= 0):  self._roi[0] = -self._roi[2] + 2
+        if (self._roi[1] + self._roi[3] <= 0):  self._roi[1] = -self._roi[3] + 2
+        assert (self._roi[2] > 0 and self._roi[3] > 0)
+
+        x = self.getFeatures(image, 0, 1.0)
+        self.train(x, self.interp_factor)
+
+        return self._roi, peak_value
+    
+    def update_s(self, image):
         if (self._roi[0] + self._roi[2] <= 0):  self._roi[0] = -self._roi[2] + 1
         if (self._roi[1] + self._roi[3] <= 0):  self._roi[1] = -self._roi[2] + 1
         if (self._roi[0] >= image.shape[1] - 1):  self._roi[0] = image.shape[1] - 2
