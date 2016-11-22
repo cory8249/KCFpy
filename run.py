@@ -160,7 +160,6 @@ if __name__ == '__main__':
         if imwrite_enable:
             cv2.imwrite('output/frame_%06d.jpg' % current_frame, frame)
 
-        cv2.waitKey(10)
         print()
 
     # terminate all trackers after all frames are processed
