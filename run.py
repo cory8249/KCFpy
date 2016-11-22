@@ -90,7 +90,7 @@ if __name__ == '__main__':
             initTracking = False
 
         if initTracking:
-            trackers.clear()  # delete old trackers
+            trackers.clear()
             all_targets = sorted(frames[current_frame], key=lambda d: d.get('id'))
             print(' ---------------- # trackers = %d' % len(all_targets), end='')
             for target in all_targets:
@@ -112,50 +112,26 @@ if __name__ == '__main__':
 
             initTracking = False
             onTracking = True
-            
+
         elif onTracking:
             t0 = time()
-            if multithread_enable:
-                futs = list()
-                for (tid, tracker) in trackers.items():
-                    fut = tracker.update(frame)
-                    futs.append(fut)
-            
-                for fut in futs:
-                    ret = fut.result()
-                    bbox= ret[0]
-                    pv = ret[1]
-                    bbox = map(int, bbox)
-                    if pv > 0.25:
-                        cv2.rectangle(frame, (bbox[0], bbox[1]),
-                                      (bbox[0] + bbox[2], bbox[1] + bbox[3]), (0, 255, 255), 1)
-                        cv2.putText(frame, '%.2f' % pv, (bbox[0], bbox[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                                    (0, 255, 0), 1)
-                    else:
-                        # cv2.rectangle(frame, (bbox[0], bbox[1]),
-                        #              (bbox[0] + bbox[2], bbox[1] + bbox[3]), (255, 0, 0), 1)
-                        cv2.putText(frame, '%.2f' % pv, (bbox[0], bbox[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                                    (255, 0, 0), 1)
-            else:
-                for (tid, tracker) in trackers.items():
-                    ret = tracker.update_s(frame)
-                    bbox= ret[0]
-                    pv = ret[1]
-                    bbox = map(int, bbox)
-                    if pv > 0.25:
-                        cv2.rectangle(frame, (bbox[0], bbox[1]),
-                                      (bbox[0] + bbox[2], bbox[1] + bbox[3]), (0, 255, 255), 1)
-                        cv2.putText(frame, '%.2f' % pv, (bbox[0], bbox[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                                    (0, 255, 0), 1)
-                    else:
-                        # cv2.rectangle(frame, (bbox[0], bbox[1]),
-                        #              (bbox[0] + bbox[2], bbox[1] + bbox[3]), (255, 0, 0), 1)
-                        cv2.putText(frame, '%.2f' % pv, (bbox[0], bbox[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                                    (255, 0, 0), 1)
-            
+            for (tid, tracker) in trackers.items():
+                # if tid in to_traced:
+                (bbox, pv) = tracker.update(frame)
+                bbox = map(int, bbox)
+                if pv > 0.25:
+                    cv2.rectangle(frame, (bbox[0], bbox[1]),
+                                  (bbox[0] + bbox[2], bbox[1] + bbox[3]), (0, 255, 255), 1)
+                    cv2.putText(frame, '%.2f' % pv, (bbox[0], bbox[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                                (0, 255, 0), 1)
+                else:
+                    # cv2.rectangle(frame, (bbox[0], bbox[1]),
+                    #              (bbox[0] + bbox[2], bbox[1] + bbox[3]), (255, 0, 0), 1)
+                    cv2.putText(frame, '%.2f' % pv, (bbox[0], bbox[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                                (255, 0, 0), 1)
             t1 = time()
             duration = t1 - t0
-            duration_smooth = 0.5 * duration_smooth + 0.5 * duration
+            duration_smooth = 0.8 * duration_smooth + 0.2 * (t1 - t0)
             fps = 1 / duration_smooth
             print(' fsp = %4f' % fps, end='')
             cv2.putText(frame, 'FPS: ' + str(fps)[:4].strip('.'), (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
