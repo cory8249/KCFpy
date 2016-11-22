@@ -163,5 +163,9 @@ if __name__ == '__main__':
         cv2.waitKey(10)
         print()
 
+    # terminate all trackers after all frames are processed
+    for tid, tracker in all_trackers.items():
+        tracker.get_in_queue().put({'cmd': 'terminate'})
+
     cap.release()
     cv2.destroyAllWindows()
