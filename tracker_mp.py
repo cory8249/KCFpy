@@ -8,7 +8,7 @@ import time
 
 
 class TrackerMP(Process):
-    def __init__(self, hog, fixed_window, multi_scale, input_queue, output_queue):
+    def __init__(self, hog=True, fixed_window=False, multi_scale=True, input_queue=Queue(), output_queue=Queue()):
         Process.__init__(self)
         self.hog = hog
         self.fixed_window = fixed_window
@@ -17,6 +17,7 @@ class TrackerMP(Process):
         self.input_queue = input_queue
         self.output_queue = output_queue
         self.image = None
+        self.object_class = None
         self.is_valid = False
 
     def get_in_queue(self):
@@ -41,14 +42,15 @@ class TrackerMP(Process):
             if cmd == 'init':
                 roi = input_dict.get('roi')
                 image = input_dict.get('image')
+                self.object_class = input_dict.get('object_class')
                 self.is_valid = self.tracker.init(roi, image)
             elif cmd == 'update':
                 if self.is_valid:
                     image = input_dict.get('image')
-                    r = self.tracker.update(image)
-                    self.output_queue.put((os.getpid(), r))
+                    roi, pv = self.tracker.update(image)
+                    self.output_queue.put({'roi': roi, 'pv': pv, 'object_class': self.object_class})
                 else:
-                    self.output_queue.put((os.getpid(), None))
+                    self.output_queue.put(None)
             elif cmd == 'terminate':
                 break
 
