@@ -166,5 +166,7 @@ if __name__ == '__main__':
     for tid, tracker in all_trackers.items():
         tracker.get_in_queue().put({'cmd': 'terminate'})
 
-    cap.release()
-    cv2.destroyAllWindows()
+    if input_mode == 'video':
+        cap.release()
+    if imshow_enable:
+        cv2.destroyAllWindows()
