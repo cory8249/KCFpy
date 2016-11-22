@@ -4,8 +4,10 @@ import cv2
 import sys
 from time import time
 import os
+from multiprocessing import Queue
 
 import kcftracker
+from tracker_mp import TrackerMP
 from config import *
 
 
@@ -90,7 +92,12 @@ if __name__ == '__main__':
             initTracking = False
 
         if initTracking:
+
+            # clear old trackers
+            for tracker in trackers.values():
+                tracker.get_in_queue().put({'cmd': 'terminate'})
             trackers.clear()
+
             all_targets = sorted(frames[current_frame], key=lambda d: d.get('id'))
             print(' ---------------- # trackers = %d' % len(all_targets), end='')
             for target in all_targets:
@@ -101,23 +108,41 @@ if __name__ == '__main__':
                 h = target.get('y2') - iy
                 tid = target.get('id')
 
-                trackers.update({tid: kcftracker.KCFTracker(True, False, True)})  # hog, fixed_window, multi-scale
+                in_queue = Queue()
+                out_queue = Queue()
+
+                trackers.update({tid: TrackerMP(True, False, True, in_queue, out_queue)})  # hog, fixed_window, multi-scale
                 # if you use hog feature, there will be a short pause after you draw a first boundingbox,
                 # that is due to the use of Numba.
 
                 tracker = trackers.get(tid)
-                is_valid = tracker.init([ix, iy, w, h], frame)
+                tracker.start()
+                tracker.get_in_queue().put({'cmd': 'init', 'roi': [ix, iy, w, h], 'image': frame})
+                '''is_valid = tracker.init()
                 if not is_valid:
                     del trackers[tid]
+                    print('del')
+                print(tid, 'is valid', frame.shape)'''
 
             initTracking = False
             onTracking = True
+            # print('initTracking finished')
 
         elif onTracking:
             t0 = time()
             for (tid, tracker) in trackers.items():
+                tracker.get_in_queue().put({'cmd': 'update', 'image': frame})
+
+            for (tid, tracker) in trackers.items():
                 # if tid in to_traced:
-                (bbox, pv) = tracker.update(frame)
+                # tracker.join()
+                out_queue = tracker.get_out_queue()
+                ret = out_queue.get()
+                # print(ret)
+                pid = ret[0]
+                bbox = ret[1][0]
+                pv = ret[1][1]
+                # print(pv)
                 bbox = map(int, bbox)
                 if pv > 0.25:
                     cv2.rectangle(frame, (bbox[0], bbox[1]),
