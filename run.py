@@ -36,12 +36,14 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:
         sys.argv.append(default_input_path)
         sys.argv.append(default_det_path)
-    assert len(sys.argv) == 3
+        sys.argv.append(default_data_format)
+    assert len(sys.argv) == 4
     if not os.path.exists('output'):
         os.mkdir('output')
 
     input_v_path = sys.argv[1]
     labels_file = sys.argv[2]
+    data_format = sys.argv[3]
     if input_v_path.find('mp4') != -1:
         input_mode = 'video'
     else:
@@ -60,7 +62,7 @@ if __name__ == '__main__':
         frames.append(list())
     with open(labels_file) as labels:
         for line in labels.readlines():
-            info = parse_label(line, 'KITTI')
+            info = parse_label(line, data_format)
             if info.get('id') != -1:  # pass unknown objects
                 fi = info.get('frame')
                 frames[fi].append(info)
