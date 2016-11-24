@@ -7,6 +7,7 @@ import os
 
 from tracker_mp import TrackerMP
 from config import *
+from util import *
 
 
 def parse_label(label_line, data_format=''):
@@ -58,7 +59,7 @@ if __name__ == '__main__':
         frames.append(list())
     with open(labels_file) as labels:
         for line in labels.readlines():
-            info = parse_label(line, 'vid')
+            info = parse_label(line, 'KITTI')
             if info.get('id') != -1:  # pass unknown objects
                 fi = info.get('frame')
                 frames[fi].append(info)
@@ -66,6 +67,8 @@ if __name__ == '__main__':
     all_trackers = dict()
     duration = 0.01
     duration_smooth = 0.01
+    sum_pv = 0.0
+    error_count = 0
 
     # ============  main tracking loop  ============ #
     for current_frame in range(frames_count):
@@ -83,6 +86,7 @@ if __name__ == '__main__':
 
         print('frame %d' % current_frame, end='')
 
+        # select mode
         initTracking = False
         if current_frame % detection_period == 0:
             initTracking = True
@@ -120,36 +124,42 @@ if __name__ == '__main__':
             for (tid, tracker) in all_trackers.items():
                 tracker.get_in_queue().put({'cmd': 'update',
                                             'image': frame})
-
+            # trackers  will calculate in their sub-processes
             for tid, tracker in all_trackers.items():
                 ret = tracker.get_out_queue().get()
                 if ret is None:
                     # something wrong with this tracker, pass it
+                    print('ret == None, tid = %d' % tid)
+                    error_count += 1
                     continue
                 roi = ret.get('roi')
                 pv = ret.get('pv')
+                sum_pv += pv
                 object_class = ret.get('object_class')
                 bbox = map(int, roi)
-                if pv > 0.25:
-                    cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[0] + bbox[2], bbox[1] + bbox[3]),
-                                  (0, 255, 255), 1)
-                    cv2.putText(frame, '%.2f' % pv, (bbox[0], bbox[1] - 2),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                                (0, 255, 0), 1)
-                    cv2.putText(frame, '%s' % object_class, (bbox[0], bbox[1] + bbox[3] - 2),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                                (0, 255, 0), 1)
-                else:
-                    cv2.putText(frame, '%.2f' % pv, (bbox[0], bbox[1]),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                                (255, 0, 0), 1)
+
+                if imshow_enable or imwrite_enable:
+                    if pv > 0.25:
+                        cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[0] + bbox[2], bbox[1] + bbox[3]),
+                                      (0, 255, 255), 1)
+                        cv2.putText(frame, '%.2f' % pv, (bbox[0], bbox[1] - 2),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                                    (0, 255, 0), 1)
+                        cv2.putText(frame, '%s' % object_class, (bbox[0], bbox[1] + bbox[3] - 2),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                                    (0, 255, 0), 1)
+                    else:
+                        cv2.putText(frame, '%.2f' % pv, (bbox[0], bbox[1]),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                                    (255, 0, 0), 1)
             t1 = time()
             duration = t1 - t0
             duration_smooth = 0.8 * duration_smooth + 0.2 * (t1 - t0)
             fps = 1 / duration_smooth
             print(' fsp = %4f' % fps, end='')
-            cv2.putText(frame, 'FPS: ' + str(fps)[:4].strip('.'), (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                        (0, 0, 255), 2)
+            if imshow_enable or imwrite_enable:
+                cv2.putText(frame, 'FPS: ' + str(fps)[:4].strip('.'), (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                            (0, 0, 255), 2)
 
         if imshow_enable:
             cv2.imshow('tracking', frame)
@@ -160,7 +170,7 @@ if __name__ == '__main__':
         if imwrite_enable:
             cv2.imwrite('output/frame_%06d.jpg' % current_frame, frame)
 
-        print()
+        print(' sum_pv = %f' % sum_pv)
 
     # terminate all trackers after all frames are processed
     for tid, tracker in all_trackers.items():
@@ -170,3 +180,5 @@ if __name__ == '__main__':
         cap.release()
     if imshow_enable:
         cv2.destroyAllWindows()
+
+    print('error_count = %d' % error_count)

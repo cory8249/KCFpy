@@ -92,7 +92,7 @@ def subwindow(img, window, borderType=cv2.BORDER_CONSTANT):
     border = getBorder(window, cutWindow)
     res = img[cutWindow[1]:cutWindow[1] + cutWindow[3], cutWindow[0]:cutWindow[0] + cutWindow[2]]
 
-    if (border != [0, 0, 0, 0]):
+    if border != [0, 0, 0, 0]:
         res = cv2.copyMakeBorder(res, border[1], border[3], border[0], border[2], borderType)
     return res
 
