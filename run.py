@@ -89,10 +89,8 @@ if __name__ == '__main__':
 
         print('frame %d' % current_frame, end='')
 
-        # select mode
-        initTracking = False
-        if current_frame % detection_period == 0:
-            initTracking = True
+        # select mode by current frame count (periodic prediction)
+        initTracking = (current_frame % detection_period == 0)
 
         if initTracking:
             # invalidate old trackers

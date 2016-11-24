@@ -1,6 +1,5 @@
 from multiprocessing import Process
 from multiprocessing import Queue
-import os
 from kcftracker import KCFTracker
 
 import numpy as np
