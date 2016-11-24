@@ -8,7 +8,7 @@ import time
 
 
 class TrackerMP(Process):
-    def __init__(self, hog=True, fixed_window=False, multi_scale=True, input_queue=Queue(), output_queue=Queue()):
+    def __init__(self, hog=True, fixed_window=False, multi_scale=True, input_queue=None, output_queue=None):
         Process.__init__(self)
         self.hog = hog
         self.fixed_window = fixed_window
@@ -52,7 +52,10 @@ class TrackerMP(Process):
                 else:
                     self.output_queue.put(None)
             elif cmd == 'terminate':
+                self.input_queue.close()
+                self.output_queue.close()
                 break
+
 
 if __name__ == '__main__':
 

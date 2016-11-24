@@ -5,6 +5,7 @@ import sys
 from time import time
 import os
 
+from multiprocessing import Queue
 from tracker_mp import TrackerMP
 from config import *
 from util import *
@@ -65,10 +66,11 @@ if __name__ == '__main__':
                 frames[fi].append(info)
 
     all_trackers = dict()
+    tracker_valid = dict()
     duration = 0.01
     duration_smooth = 0.01
     sum_pv = 0.0
-    error_count = 0
+    no_result_count = 0
 
     # ============  main tracking loop  ============ #
     for current_frame in range(frames_count):
@@ -92,10 +94,9 @@ if __name__ == '__main__':
             initTracking = True
 
         if initTracking:
-            # clear old trackers
+            # invalidate old trackers
             for tid, tracker in all_trackers.items():
-                tracker.get_in_queue().put({'cmd': 'terminate'})
-            all_trackers.clear()
+                tracker_valid.update({tid: False})
 
             all_targets = sorted(frames[current_frame], key=lambda d: d.get('id'))
             print(' ---------------- # trackers = %d' % len(all_targets), end='')
@@ -108,13 +109,17 @@ if __name__ == '__main__':
                 tid = target.get('id')
                 object_class = target.get('object_class')
 
-                tracker = TrackerMP(hog=True, fixed_window=False, multi_scale=True)
-                tracker.start()
+                tracker = all_trackers.get(tid)
+                if tracker is None:
+                    tracker = TrackerMP(hog=True, fixed_window=False, multi_scale=True,
+                                        input_queue=Queue(), output_queue=Queue())
+                    tracker.start()
                 tracker.get_in_queue().put({'cmd': 'init',
                                             'object_class': object_class,
                                             'roi': [ix, iy, w, h],
                                             'image': frame})
                 all_trackers.update({tid: tracker})  # add to trackers' dict
+                tracker_valid.update({tid: True})
 
             initTracking = False
             onTracking = True
@@ -126,11 +131,13 @@ if __name__ == '__main__':
                                             'image': frame})
             # trackers  will calculate in their sub-processes
             for tid, tracker in all_trackers.items():
+                if not tracker_valid.get(tid):
+                    continue
                 ret = tracker.get_out_queue().get()
                 if ret is None:
                     # something wrong with this tracker, pass it
                     print('ret == None, tid = %d' % tid)
-                    error_count += 1
+                    no_result_count += 1
                     continue
                 roi = ret.get('roi')
                 pv = ret.get('pv')
@@ -145,7 +152,7 @@ if __name__ == '__main__':
                         cv2.putText(frame, '%.2f' % pv, (bbox[0], bbox[1] - 2),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                                     (0, 255, 0), 1)
-                        cv2.putText(frame, '%s' % object_class, (bbox[0], bbox[1] + bbox[3] - 2),
+                        cv2.putText(frame, '%d-%s' % (tid, object_class), (bbox[0], bbox[1] + bbox[3] - 2),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                                     (0, 255, 0), 1)
                     else:
@@ -175,10 +182,12 @@ if __name__ == '__main__':
     # terminate all trackers after all frames are processed
     for tid, tracker in all_trackers.items():
         tracker.get_in_queue().put({'cmd': 'terminate'})
+        if tracker.is_alive():
+            tracker.terminate()
 
     if input_mode == 'video':
         cap.release()
     if imshow_enable:
         cv2.destroyAllWindows()
 
-    print('error_count = %d' % error_count)
+    print('no_result_count = %d' % no_result_count)
