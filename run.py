@@ -39,7 +39,7 @@ if __name__ == '__main__':
     assert len(sys.argv) == 3
     if not os.path.exists('output'):
         os.mkdir('output')
-    
+
     input_v_path = sys.argv[1]
     labels_file = sys.argv[2]
     if input_v_path.find('mp4') != -1:
@@ -70,6 +70,7 @@ if __name__ == '__main__':
     duration = 0.01
     duration_smooth = 0.01
     sum_pv = 0.0
+    sum_iou = 0.0
     no_result_count = 0
 
     # ============  main tracking loop  ============ #
@@ -126,33 +127,45 @@ if __name__ == '__main__':
 
         elif onTracking:
             t0 = time()
-            for (tid, tracker) in all_trackers.items():
+            for tracker in [v for (k, v) in all_trackers.items() if tracker_valid.get(k)]:
                 tracker.get_in_queue().put({'cmd': 'update',
                                             'image': frame})
             # trackers  will calculate in their sub-processes
-            for tid, tracker in all_trackers.items():
-                if not tracker_valid.get(tid):
-                    continue
+
+            ground_truth = sorted(frames[current_frame], key=lambda d: d.get('id'))
+            ground_truth_id = [x.get('id') for x in ground_truth]
+            for (tid, tracker) in [(k, v) for (k, v) in all_trackers.items() if tracker_valid.get(k)]:
                 ret = tracker.get_out_queue().get()
                 if ret is None:
                     # something wrong with this tracker, pass it
                     print('ret == None, tid = %d' % tid)
                     no_result_count += 1
                     continue
-                roi = ret.get('roi')
+                roi = map(int, ret.get('roi'))
+                bbox = (roi[0], roi[1], roi[0] + roi[2], roi[1] + roi[3])
                 pv = ret.get('pv')
+                pv_threshold = 0.25
+                active = pv > pv_threshold
                 sum_pv += pv
                 object_class = ret.get('object_class')
-                bbox = map(int, roi)
+
+                if active and tid in ground_truth_id:
+                    # print(target)
+                    ix = ground_truth_id.index(tid)
+                    gt = ground_truth[ix]
+                    gt_bbox = (gt.get('x1'), gt.get('y1'), gt.get('x2'), gt.get('y2'))
+                    iou = iou_func(bbox, gt_bbox)
+                    sum_iou += iou
+                    # print('%d iou = %f' % (tid, iou))
 
                 if imshow_enable or imwrite_enable:
-                    if pv > 0.25:
-                        cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[0] + bbox[2], bbox[1] + bbox[3]),
+                    if active:
+                        cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]),
                                       (0, 255, 255), 1)
                         cv2.putText(frame, '%.2f' % pv, (bbox[0], bbox[1] - 2),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                                     (0, 255, 0), 1)
-                        cv2.putText(frame, '%d-%s' % (tid, object_class), (bbox[0], bbox[1] + bbox[3] - 2),
+                        cv2.putText(frame, '%d-%s' % (tid, object_class), (bbox[0], bbox[1] + roi[3] - 2),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                                     (0, 255, 0), 1)
                     else:
@@ -191,3 +204,4 @@ if __name__ == '__main__':
         cv2.destroyAllWindows()
 
     print('no_result_count = %d' % no_result_count)
+    print('sum_iou = %f' % sum_iou)

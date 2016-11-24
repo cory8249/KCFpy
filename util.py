@@ -1,27 +1,33 @@
 
 
-def iou(boxA, boxB):
-    # determine the (x, y)-coordinates of the intersection rectangle
-    xA = max(boxA[0], boxB[0])
-    yA = max(boxA[1], boxB[1])
-    xB = min(boxA[2], boxB[2])
-    yB = min(boxA[3], boxB[3])
+def iou_func(bbox1, bbox2):
+    x1 = bbox1[0]
+    y1 = bbox1[1]
+    width1 = bbox1[2] - bbox1[0]
+    height1 = bbox1[3] - bbox1[1]
 
-    # compute the area of intersection rectangle
-    interArea = (xB - xA + 1) * (yB - yA + 1)
+    x2 = bbox2[0]
+    y2 = bbox2[1]
+    width2 = bbox2[2] - bbox2[0]
+    height2 = bbox2[3] - bbox2[1]
 
-    # compute the area of both the prediction and ground-truth
-    # rectangles
-    boxAArea = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1)
-    boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
+    endx = max(x1 + width1, x2 + width2)
+    startx = min(x1, x2)
+    width = width1 + width2 - (endx - startx)
 
-    # compute the intersection over union by taking the intersection
-    # area and dividing it by the sum of prediction + ground-truth
-    # areas - the interesection area
-    iou = interArea / float(boxAArea + boxBArea - interArea)
+    endy = max(y1 + height1, y2 + height2)
+    starty = min(y1, y2)
+    height = height1 + height2 - (endy - starty)
 
-    # return the intersection over union value
-    return iou
+    if width <= 0 or height <= 0:
+        ratio = 0
+    else:
+        Area = width * height
+        Area1 = width1 * height1
+        Area2 = width2 * height2
+        ratio = Area * 1. / (Area1 + Area2 - Area)
+    # return IOU
+    return ratio
 
 
 if __name__ == '__main__':
