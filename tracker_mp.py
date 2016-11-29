@@ -16,7 +16,7 @@ class TrackerMP(Process):
         self.input_queue = input_queue
         self.output_queue = output_queue
         self.image = None
-        self.object_class = None
+        self.label = None
         self.is_valid = False
 
     def get_in_queue(self):
@@ -41,13 +41,13 @@ class TrackerMP(Process):
             if cmd == 'init':
                 roi = input_dict.get('roi')
                 image = input_dict.get('image')
-                self.object_class = input_dict.get('object_class')
+                self.label = input_dict.get('label')
                 self.is_valid = self.tracker.init(roi, image)
             elif cmd == 'update':
                 if self.is_valid:
                     image = input_dict.get('image')
                     roi, pv = self.tracker.update(image)
-                    self.output_queue.put({'roi': roi, 'pv': pv, 'object_class': self.object_class})
+                    self.output_queue.put({'roi': roi, 'pv': pv, 'label': self.label})
                 else:
                     self.output_queue.put(None)
             elif cmd == 'terminate':

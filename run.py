@@ -9,24 +9,7 @@ from multiprocessing import Queue
 from tracker_mp import TrackerMP
 from config import *
 from util import *
-
-
-def parse_label(label_line, data_format=''):
-    if data_format == 'KITTI':
-        val = label_line.split(' ')
-        d = {'frame': int(val[0]), 'id': int(val[1]), 'object_class': val[2].strip('"'),
-             'x1': int(float(val[6])), 'y1': int(float(val[7])), 'x2': int(float(val[8])), 'y2': int(float(val[9]))}
-    elif data_format == 'VTB':
-        val = label_line.split('\t')
-        d = {'frame': int(val[0]) - 1, 'id': int(val[1]), 'object_class': val[2].strip('"'),
-             'x1': int(float(val[3])), 'y1': int(float(val[4])),
-             'x2': int(float(val[3]) + float(val[5])), 'y2': int(float(val[4]) + float(val[6]))}
-    else:
-        val = label_line.split('\t')
-        d = {'frame': int(val[0].lstrip('0')) - 1, 'id': int(val[1]), 'object_class': val[2].strip('"'),
-             'x1': int(float(val[3])), 'y1': int(float(val[4])), 'x2': int(float(val[5])), 'y2': int(float(val[6]))}
-
-    return d
+from detector import Detector
 
 
 if __name__ == '__main__':
@@ -42,12 +25,15 @@ if __name__ == '__main__':
         os.mkdir('output')
 
     input_v_path = sys.argv[1]
-    labels_file = sys.argv[2]
+    label_file = sys.argv[2]
     data_format = sys.argv[3]
     if input_v_path.find('mp4') != -1:
         input_mode = 'video'
     else:
         input_mode = 'image'
+
+    # object detector
+    detector = Detector(pseudo=False, label_file=label_file, data_format=data_format)
 
     if input_mode == 'video':
         cap = cv2.VideoCapture(input_v_path)
@@ -56,16 +42,6 @@ if __name__ == '__main__':
     else:
         files_in_dir = sorted([f for f in os.listdir(input_v_path) if os.path.isfile(os.path.join(input_v_path, f))])
         frames_count = len(files_in_dir)
-
-    frames = list()
-    for _ in range(frames_count):
-        frames.append(list())
-    with open(labels_file) as labels:
-        for line in labels.readlines():
-            info = parse_label(line, data_format)
-            if info.get('id') != -1:  # pass unknown objects
-                fi = info.get('frame')
-                frames[fi].append(info)
 
     all_trackers = dict()
     tracker_valid = dict()
@@ -95,11 +71,15 @@ if __name__ == '__main__':
         initTracking = (current_frame % detection_period == 0)
 
         if initTracking:
+            # run detection
+            det = detector.detect(frame, current_frame)
+            print(det)
+
             # invalidate old trackers
             for tid, tracker in all_trackers.items():
                 tracker_valid.update({tid: False})
 
-            all_targets = sorted(frames[current_frame], key=lambda d: d.get('id'))
+            all_targets = sorted(det, key=lambda d: d.get('id'))
             print(' ---------------- # trackers = %d' % len(all_targets), end='')
             for target in all_targets:
                 # print(target)
@@ -108,7 +88,7 @@ if __name__ == '__main__':
                 w = target.get('x2') - ix
                 h = target.get('y2') - iy
                 tid = target.get('id')
-                object_class = target.get('object_class')
+                label = target.get('label')
 
                 tracker = all_trackers.get(tid)
                 if tracker is None:
@@ -116,7 +96,7 @@ if __name__ == '__main__':
                                         input_queue=Queue(), output_queue=Queue())
                     tracker.start()
                 tracker.get_in_queue().put({'cmd': 'init',
-                                            'object_class': object_class,
+                                            'label': label,
                                             'roi': [ix, iy, w, h],
                                             'image': frame})
                 all_trackers.update({tid: tracker})  # add to trackers' dict
@@ -131,9 +111,11 @@ if __name__ == '__main__':
                 tracker.get_in_queue().put({'cmd': 'update',
                                             'image': frame})
             # trackers  will calculate in their sub-processes
-
-            ground_truth = sorted(frames[current_frame], key=lambda d: d.get('id'))
-            ground_truth_id = [x.get('id') for x in ground_truth]
+            if False:
+                det = detector.detect(frame, current_frame)
+                print(det)
+                ground_truth = sorted(det, key=lambda d: d.get('id'))
+                ground_truth_id = [x.get('id') for x in ground_truth]
             for (tid, tracker) in [(k, v) for (k, v) in all_trackers.items() if tracker_valid.get(k)]:
                 ret = tracker.get_out_queue().get()
                 if ret is None:
@@ -147,9 +129,9 @@ if __name__ == '__main__':
                 pv_threshold = 0.25
                 active = pv > pv_threshold
                 sum_pv += pv
-                object_class = ret.get('object_class')
+                label = ret.get('label')
 
-                if active and tid in ground_truth_id:
+                if False and active and tid in ground_truth_id:
                     # print(target)
                     ix = ground_truth_id.index(tid)
                     gt = ground_truth[ix]
@@ -165,7 +147,7 @@ if __name__ == '__main__':
                         cv2.putText(frame, '%.2f' % pv, (bbox[0], bbox[1] - 2),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                                     (0, 255, 0), 1)
-                        cv2.putText(frame, '%d-%s' % (tid, object_class), (bbox[0], bbox[1] + roi[3] - 2),
+                        cv2.putText(frame, '%d-%s' % (tid, label), (bbox[0], bbox[1] + roi[3] - 2),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                                     (0, 255, 0), 1)
                     else:
